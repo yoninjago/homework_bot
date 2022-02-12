@@ -57,7 +57,7 @@ def send_message(bot, message):
 
 
 def get_api_answer(current_timestamp):
-    """Запрос к эндпоинту API-сервиса"""
+    """Запрос к эндпоинту API-сервиса."""
     timestamp = current_timestamp or int(time.time())
     try:
         homework_statuses = requests.get(
@@ -103,7 +103,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность переменных окружения,
-     которые необходимы для работы программы
+    которые необходимы для работы программы.
     """
     for token in [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]:
         if not token:
