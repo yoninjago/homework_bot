@@ -84,10 +84,7 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """
-    Извлекает из информации о конкретной домашней работе
-    статус этой работы.
-    """
+    """Извлекает статус домашней работы работы."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_name is None or homework_status is None:
@@ -103,10 +100,7 @@ def parse_status(homework):
 
 
 def check_tokens():
-    """
-    Проверяет доступность переменных окружения,
-    которые необходимы для работы программы.
-    """
+    """Проверяет доступность необходимых переменных окружения."""
     for token in [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]:
         if not token:
             return False
