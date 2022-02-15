@@ -26,17 +26,14 @@ HOMEWORK_VERDICTS = {
 }
 
 MESSAGE = 'Отправка сообщения в чат: {message}'
-RESPONSE_ERROR = ('Эндпоинт {endpoint} недоступен.'
-                  'Код ответа API: {status_code}'
-                  ' Используемые параметры запроса:'
+REQUEST_PARAMS = (' Используемые параметры запроса:'
                   ' url: {url}; headers: {headers}; params: {params}')
-CONNECTION_ERROR = ('Проблемы с подключением к серверу: {error}.'
-                    ' Используемые параметры запроса:'
-                    ' url: {url}; headers: {headers}; params: {params}')
+RESPONSE_ERROR = ('Неожиданный ответ сервера.'
+                  ' Код ответа API: {status_code}') + REQUEST_PARAMS
+CONNECTION_ERROR = ('Проблемы с подключением к серверу:'
+                    ' {error}.') + REQUEST_PARAMS
 UNEXPECTED_RESPONSE = ('Неожиданный ответ сервера. Описание проблемы: {error}.'
-                       ' Код ответа API: {status_code}.'
-                       ' Используемые параметры запроса:'
-                       ' url: {url}; headers: {headers}; params: {params}.')
+                       ' Код ответа API: {status_code}.') + REQUEST_PARAMS
 UNEXPECTED_RESPONSE_TYPE = 'Неожиданный формат данных ответа: {type}'
 UNEXPECTED_HOMEWORK_TYPE = ('Неожиданный формат данных '
                             'домашнего задания: {type}')
@@ -44,10 +41,11 @@ UNEXPECTED_STATUS = 'Неожиданный статус домашней раб
 HOMEWORK_STATUS_CHANGE = ('Изменился статус проверки работы "{homework_name}".'
                           ' {verdict}')
 ENVIRONMENT_VARIABLES_MISSING = (
-    'Отсутствует обязательная переменная окружения: {name}')
+    'Отсутствуют обязательные переменные окружения: {name}')
 STOP_BOT = 'Программа принудительно остановлена.'
 STATUS_NOT_CHANGE = 'В ответе отсутствуют новые статусы домашней работы'
 ERROR_MESSAGE = 'Сбой в работе программы: {error}'
+TOKENS_NAMES = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -70,16 +68,16 @@ def send_message(bot, message):
     return bot.send_message(TELEGRAM_CHAT_ID, message)
 
 
-def get_api_answer(current_timestamp):
+def get_api_answer(timestamp):
     """Запрос к эндпоинту API-сервиса."""
     REQUEST = {
         'url': ENDPOINT,
         'headers': HEADERS,
-        'params': {'from_date': current_timestamp}
+        'params': {'from_date': timestamp}
     }
     try:
         homework_statuses_json = requests.get(**REQUEST)
-    except requests.exceptions.ConnectionError as error:
+    except requests.exceptions.RequestException as error:
         raise ConnectionError(CONNECTION_ERROR.format(**REQUEST, error=error))
     homework_statuses = homework_statuses_json.json()
     for field in ['error', 'code']:
@@ -91,7 +89,7 @@ def get_api_answer(current_timestamp):
             ))
     if homework_statuses_json.status_code != 200:
         raise ValueError(RESPONSE_ERROR.format(
-            endpoint=ENDPOINT, status_code=homework_statuses_json.status_code
+            **REQUEST, status_code=homework_statuses_json.status_code
         ))
     return homework_statuses
 
@@ -120,10 +118,15 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность необходимых переменных окружения."""
-    for name in ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']:
+    missing_tokens = []
+    for name in TOKENS_NAMES:
         if not globals()[name]:
-            logger.critical(ENVIRONMENT_VARIABLES_MISSING.format(name=name))
-            return False
+            missing_tokens.append(name)
+    if missing_tokens:
+        logger.critical(ENVIRONMENT_VARIABLES_MISSING.format(
+            name=','.join(missing_tokens))
+        )
+        return False
     return True
 
 
@@ -132,29 +135,30 @@ def main():
     if not check_tokens():
         raise ValueError(STOP_BOT)
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time.time())
+    timestamp = int(time.time())
     sent_message = ''
     while True:
         try:
-            response = get_api_answer(current_timestamp)
+            response = get_api_answer(timestamp)
             new_homeworks = check_response(response)
             if new_homeworks:
                 send_message(bot, parse_status(new_homeworks[0]))
             else:
                 logger.debug(STATUS_NOT_CHANGE)
-            time.sleep(RETRY_TIME)
         except Exception as error:
             message = ERROR_MESSAGE.format(error=error)
             logger.exception(message)
             if sent_message != message:
-                sent_message = message
                 try:
                     send_message(bot, message)
                 except Exception as error:
                     logger.exception(ERROR_MESSAGE.format(error=error))
-            time.sleep(RETRY_TIME)
+                else:
+                    sent_message = message
         else:
-            current_timestamp = response.get('current_date', current_timestamp)
+            timestamp = response.get('current_date', timestamp)
+        finally:
+            time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
