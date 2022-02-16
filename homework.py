@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from logging.handlers import RotatingFileHandler
+from urllib import request
 
 import requests
 import telegram
@@ -70,26 +71,26 @@ def send_message(bot, message):
 
 def get_api_answer(timestamp):
     """Запрос к эндпоинту API-сервиса."""
-    REQUEST = {
+    request = {
         'url': ENDPOINT,
         'headers': HEADERS,
         'params': {'from_date': timestamp}
     }
     try:
-        homework_statuses_json = requests.get(**REQUEST)
+        homework_statuses_json = requests.get(**request)
     except requests.exceptions.RequestException as error:
-        raise ConnectionError(CONNECTION_ERROR.format(**REQUEST, error=error))
+        raise ConnectionError(CONNECTION_ERROR.format(**request, error=error))
     homework_statuses = homework_statuses_json.json()
     for field in ['error', 'code']:
         if field in homework_statuses:
             raise RuntimeError(UNEXPECTED_RESPONSE.format(
-                **REQUEST,
+                **request,
                 error=homework_statuses.get(field),
                 status_code=homework_statuses_json.status_code
             ))
     if homework_statuses_json.status_code != 200:
         raise ValueError(RESPONSE_ERROR.format(
-            **REQUEST, status_code=homework_statuses_json.status_code
+            **request, status_code=homework_statuses_json.status_code
         ))
     return homework_statuses
 
@@ -118,10 +119,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность необходимых переменных окружения."""
-    missing_tokens = []
-    for name in TOKENS_NAMES:
-        if not globals()[name]:
-            missing_tokens.append(name)
+    missing_tokens = [name for name in TOKENS_NAMES if not globals()[name]]
     if missing_tokens:
         logger.critical(ENVIRONMENT_VARIABLES_MISSING.format(
             name=','.join(missing_tokens))
